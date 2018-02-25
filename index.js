@@ -6,6 +6,9 @@ var path = require('path')
 var net = require('net')
 var events = require('events')
 var os = require('os')
+var Docker = require('dockerode')
+
+var docker = Docker()
 
 module.exports = Mininet
 
@@ -94,9 +97,8 @@ Mininet.prototype._execNow = function (cmd) {
       try:
         import json
         from mininet.topo import Topo
-        from mininet.net import Mininet
+        from mininet.net import Containernet
         from mininet.node import findController
-        from mininet.node import OVSBridge
         from mininet.link import Link, TCLink, OVSLink
       except:
         exit(10)
@@ -104,8 +106,8 @@ Mininet.prototype._execNow = function (cmd) {
       def print_host(h):
         try:
           print "ack", json.dumps({'name': h.name, 'ip': h.IP(), 'mac': h.MAC()})
-        except:
-          print "err", json.dumps("host info failed")
+        except Exception as e:
+          print "err", json.dumps("host info failed: " + str(e.message))
 
       def net_start():
         try:
@@ -114,10 +116,10 @@ Mininet.prototype._execNow = function (cmd) {
           for h in net.hosts:
             result.append({'name': h.name, 'ip': h.IP(), 'mac': h.MAC()})
           print "ack", json.dumps(result)
-        except:
-          print "err", json.dumps("start failed")
+        except Exception as e:
+          print "err", json.dumps("start failed: " + str(e.message))
 
-      net = Mininet(link=TCLink, switch=OVSBridge, controller=findController())
+      net = Containernet(link=TCLink, controller=findController())
     `))
   }
 
@@ -189,8 +191,8 @@ Mininet.prototype.createController = function () {
   return controller
 }
 
-Mininet.prototype.createHost = function () {
-  var host = new Host(this.hosts.length, this)
+Mininet.prototype.createHost = function (options) {
+  var host = new Host(this.hosts.length, this, options)
   this.hosts.push(host)
   return host
 }
@@ -242,20 +244,25 @@ function Switch (index, mn) {
   `)
 }
 
-function Host (index, mn) {
+function Host (index, mn, options) {
   events.EventEmitter.call(this)
   this.index = index
-  this.id = 'h' + (index + 1)
+  this.id = 'd' + (index + 1)
+  this.name = `mn.${this.id}`
   this.ip = null
   this.mac = null
   this.processes = []
+  this._opts = Object.assign({
+    image: 'alpine',
+    cmd: '/bin/bash'
+  }, options)
   this._ids = 0
   this._mn = mn
   this._mn._exec(`
     try:
-      ${this.id} = net.addHost("${this.id}")
-    except:
-      print "critical", json.dumps("add host failed")
+      ${this.id} = net.addDocker("${this.id}", dimage="${this._opts.image}", dcmd="${this._opts.cmd}")
+    except Exception as e:
+      print "critical", json.dumps("add host failed: " + str(e.message))
   `)
 }
 
@@ -372,86 +379,11 @@ Switch.prototype.link = function (to, opts) {
   this._mn._exec(`
     try:
       net.addLink(${this.id}, ${to.id} ${line})
-    except:
-      print "critical", json.dumps("add link failed")
+    except Exception as e:
+      print "critical", json.dumps("add link failed: " + str(e.message))
   `)
 
   return to
-}
-
-Host.prototype.spawn = function (cmd, opts) {
-  if (!opts) opts = {}
-  if (!Array.isArray(cmd)) cmd = ['/bin/bash', '-c', cmd]
-  if (opts.prefixStdio === undefined) opts.prefixStdio = this._mn._prefixStdio
-  if (opts.stdio === undefined) opts.stdio = this._mn._stdio
-
-  cmd = cmd.map(c => JSON.stringify(c)).join(' ')
-
-  var proc = new events.EventEmitter()
-  var self = this
-
-  proc.command = cmd
-  proc.stdio = null
-  proc.rpc = null
-  proc.pending = []
-  proc._id = this._ids++
-  proc.id = this.id + '.' + proc._id
-  proc.pid = 0
-  proc.kill = kill
-  proc.send = sendFromHost
-  proc._send = send
-  proc.killed = false
-  proc.prefixStdio = opts.prefixStdio || null
-  if (proc.prefixStdio === true) proc.prefixStdio = `[${proc.id}]`
-
-  this.processes.push(proc)
-  this.exec(fork(this.index, proc._id, cmd, this._mn._sock), onspawn)
-
-  if (opts.stdio === 'inherit') {
-    proc.on('stdout', data => process.stdout.write(data))
-  }
-
-  return proc
-
-  function sendFromHost (name, data) {
-    send(name, data, 'host')
-  }
-
-  function send (name, data, from) {
-    if (!proc.rpc) {
-      proc.pending.push({name: name, data: data, from: from})
-      return
-    }
-    proc.rpc.write(JSON.stringify({name: name, data: data, from: from}) + '\n')
-  }
-
-  function kill (sig) {
-    if (proc.killed) return
-    proc.killed = true
-    if (!sig) sig = 'SIGTERM'
-    if (proc.pid) pkill()
-    else proc.once('spawn', pkill)
-
-    function pkill () {
-      var ppid = `$(ps -o ppid,pid | grep '^[ ]*${proc.pid}' | awk '{print $2}' | head -n 1)`
-      self.exec(`pkill -P ${ppid} --signal ${sig}`)
-    }
-  }
-
-  function onspawn (err, data) {
-    if (err) return self._onclose(proc, err)
-    var pid = Number(data.trim().split('\n').pop())
-    proc.pid = pid
-    proc.emit('spawn')
-  }
-}
-
-Host.prototype.spawnNode = function (prog, opts) {
-  return this.spawn([
-    process.execPath,
-    '-e',
-    'require("vm").runInThisContext(Buffer.from("' + Buffer.from(prog).toString('hex') + '", "hex").toString(), {filename: "[eval]"})'
-  ], opts)
 }
 
 Host.prototype._onclose = function (proc, err) {
@@ -469,19 +401,6 @@ Host.prototype.exec = function (cmd, cb) {
     res = ${this.id}.cmd(${JSON.stringify(cmd)})
     print "ack", json.dumps(res)
   `)
-}
-
-function header (index, id, type) {
-  var str = index + ' ' + id + ' ' + type
-  while (str.length < 31) str += ' '
-  return str
-}
-
-function fork (host, id, cmd, sock) {
-  var h1 = header(host, id, 'stdio')
-  var h2 = header(host, id, 'rpc')
-  var env = `export MN_HEADER="${h2}" && export MN_SOCK="${sock}"`
-  return `((${env} && echo "${h1}" && (${cmd})) 2>&1 | nc -U "${sock}") & echo $!`
 }
 
 function noop () {}

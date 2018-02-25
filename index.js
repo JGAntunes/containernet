@@ -98,7 +98,7 @@ Mininet.prototype._execNow = function (cmd) {
         import json
         from mininet.topo import Topo
         from mininet.net import Containernet
-        from mininet.node import findController
+        from mininet.node import Controller
         from mininet.link import Link, TCLink, OVSLink
       except:
         exit(10)
@@ -119,7 +119,8 @@ Mininet.prototype._execNow = function (cmd) {
         except Exception as e:
           print "err", json.dumps("start failed: " + str(e.message))
 
-      net = Containernet(link=TCLink, controller=findController())
+      net = Containernet(link=TCLink, controller=Controller)
+      net.addController("c0")
     `))
   }
 

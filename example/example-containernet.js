@@ -1,23 +1,27 @@
 var mininet = require('../')
-var mn = mininet({debug: true})
+var mn = mininet()
 
 var s1 = mn.createSwitch()
-var h1 = mn.createHost({image: 'node'})
-var h2 = mn.createHost({image: 'node'})
+var d1 = mn.createHost({image: 'ubuntu:trusty', cmd: '/bin/bash'})
+var d2 = mn.createHost({image: 'ubuntu:trusty', cmd: '/bin/bash'})
 
-h1.link(s1)
-h2.link(s1)
+d1.link(s1)
+d2.link(s1)
 
 mn.start(function () {
   console.log('mininet started')
+  console.log(`d2 ${d2.ip} ${d2.mac}`)
+  // Test connectivity
+  d1.exec(`ping -c 2 ${d2.ip}`, function (err, result) {
+    if (err) {
+      console.log(err)
+    } else {
+      console.log(result)
+    }
+    // Stop mininet
+    mn.stop()
+  })
 })
-
-h1.exec('echo blaaaaah', console.log)
-  // .on('message:listening', function () {
-  //   h2.spawn('curl --silent ' + h1.ip + ':10000', {
-  //     stdio: 'inherit'
-  //   })
-  // })
 
 process.on('SIGINT', function () {
   mn.stop()

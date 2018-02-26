@@ -1,7 +1,7 @@
 {
-  "name": "mininet",
-  "version": "2.6.1",
-  "description": "Spin up and interact with virtual networks using Mininet and Node.js",
+  "name": "containernet",
+  "version": "0.1.0",
+  "description": "Spin up and interact with virtual networks using Containernet and Node.js",
   "main": "index.js",
   "dependencies": {
     "dockerode": "^2.5.4",
@@ -17,12 +17,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mafintosh/mininet.git"
+    "url": "https://github.com/jgantunes/containernet.git"
   },
-  "author": "Mathias Buus (@mafintosh)",
+  "author": "João Antunes (@jgantunes)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mafintosh/mininet/issues"
+    "url": "https://github.com/jgantunes/containernet/issues"
   },
-  "homepage": "https://github.com/mafintosh/mininet"
+  "homepage": "https://github.com/jgantunes/containernet"
 }

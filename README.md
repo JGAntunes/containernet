@@ -27,11 +27,11 @@ cn.start(function () {
   console.log('containernet started')
   console.log(`d2 ${d2.ip} ${d2.mac}`)
   // Test connectivity
-  d1.exec(`ping -c 2 ${d2.ip}`, function (err, result) {
+  d1.exec(`ping -c 2 ${d2.ip}`, function (err, stream) {
     if (err) {
       console.log(err)
     } else {
-      console.log(result)
+      stream.pipe(process.stdout)
     }
     // Stop containernet
     cn.stop()
@@ -127,7 +127,7 @@ Takes the same options as `sw.link`.
 
 #### `host.exec(cmd, [callback])`
 
-Execute a command and buffer the output and return it in the callback.
+Execute a docker exec command and return the stream in the callback.
 
 ## License
 

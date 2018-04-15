@@ -178,6 +178,7 @@ Mininet.prototype.start = function (cb) {
       var host = self.hosts[index]
       host.ip = inf.ip
       host.mac = inf.mac
+      host.container = docker.getContainer(host.name)
       host.emit('network')
     }
 
@@ -257,6 +258,7 @@ function Host (index, mn, options) {
     image: 'alpine',
     cmd: '/bin/bash'
   }, options)
+  this.container = null
   this._ids = 0
   this._mn = mn
   this._mn._exec(`
@@ -397,11 +399,13 @@ Host.prototype._onclose = function (proc, err) {
 }
 
 Host.prototype.exec = function (cmd, cb) {
-  this._mn._queue.push(cb || noop)
-  this._mn._exec(`
-    res = ${this.id}.cmd(${JSON.stringify(cmd)})
-    print "ack", json.dumps(res)
-  `)
+  this.container.exec({Cmd: cmd.split(' '), AttachStdout: true, AttachStderr: true}, (err, exec) => {
+    if (err) return cb(err)
+    exec.start({}, (err, stream) => {
+      if (err) return cb(err)
+      return cb(null, stream)
+    })
+  })
 }
 
 function noop () {}

@@ -1,4 +1,5 @@
 var split = require('split2')
+var through = require('through2')
 var proc = require('child_process')
 var util = require('util')
 var fs = require('fs')
@@ -399,11 +400,16 @@ Host.prototype._onclose = function (proc, err) {
 }
 
 Host.prototype.exec = function (cmd, cb) {
-  this.container.exec({Cmd: cmd.split(' '), AttachStdout: true, AttachStderr: true}, (err, exec) => {
+  this.container.exec({Cmd: cmd.split(' '), AttachStdout: true, AttachStderr: true, Tty: false, AttachStdin: false}, (err, exec) => {
     if (err) return cb(err)
     exec.start({}, (err, stream) => {
       if (err) return cb(err)
-      return cb(null, stream)
+      const response = through()
+      // Remove the control bytes from the stream beginning
+      this.container.modem.demuxStream(stream, response, response)
+      // No cleanup happening in demux it seems...
+      stream.on('end', () => response.end())
+      return cb(null, response)
     })
   })
 }

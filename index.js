@@ -414,6 +414,13 @@ Host.prototype.exec = function (cmd, cb) {
   })
 }
 
+Host.prototype.logs = function (opts, cb) {
+  cb = cb || opts
+  opts = typeof opts === 'function' ? {} : opts
+  opts = Object.assign({follow: false, stdout: true, stderr: true}, opts)
+  this.container.logs(opts, cb)
+}
+
 function noop () {}
 
 function trim (s) {

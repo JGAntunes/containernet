@@ -257,14 +257,16 @@ function Host (index, mn, options) {
   this.processes = []
   this._opts = Object.assign({
     image: 'alpine',
-    cmd: '/bin/bash'
+    cmd: '/bin/sh'
   }, options)
   this.container = null
   this._ids = 0
   this._mn = mn
+  // const network = this._opts.ip ? `ip="${this._opts.ip}", defaultRoute='${this.id}-eth0',` : ''
+  const network = this._opts.ip ? `ip="${this._opts.ip}", ` : ''
   this._mn._exec(`
     try:
-      ${this.id} = net.addDocker("${this.id}", dimage="${this._opts.image}", dcmd="${this._opts.cmd}")
+      ${this.id} = net.addDocker("${this.id}", dimage="${this._opts.image}", ${network} defaultRoute="${this.id}-eth0", dcmd="${this._opts.cmd}")
     except Exception as e:
       print "critical", json.dumps("add host failed: " + str(e.message))
   `)
